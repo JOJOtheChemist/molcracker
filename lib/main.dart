@@ -16,12 +16,59 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '分子可视化卡片',
+      title: '3D分子可视化',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const MoleculeViewerPage(),
+      home: const HomePage(),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('3D分子可视化'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MoleculeViewerPage()),
+                );
+              },
+              child: const Text('查看分子结构'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HeartEffectPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.pink,
+              ),
+              child: const Text('查看心形特效'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -35,157 +82,81 @@ class MoleculeViewerPage extends StatefulWidget {
 
 class _MoleculeViewerPageState extends State<MoleculeViewerPage> {
   late WebViewController _controller;
-  bool _isLoading = true;
-  String _currentMolecule = 'water.pdb';
-
-  // 可用的分子列表
-  final List<Map<String, String>> _availableMolecules = [
-    {'name': '水分子 (Water)', 'file': 'water.pdb'},
-    {'name': '咖啡因 (Caffeine)', 'file': 'caffeine.pdb'},
-    {'name': '血红蛋白片段 (Hemoglobin)', 'file': 'hemoglobin.pdb'},
+  String? pdbData;
+  final List<String> predefinedMolecules = [
+    'caffeine.pdb',
+    'ethanol.pdb',
+    'aspirin.pdb',
+    'glucose.pdb',
+    'dna.pdb',
   ];
 
   @override
   void initState() {
     super.initState();
-    _initializeWebView();
+    _initWebView();
   }
 
-  void _initializeWebView() {
+  void _initWebView() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
+      ..setBackgroundColor(const Color(0x00000000))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (url) async {
-            debugPrint('WebView page finished loading');
-            await _loadDefaultMolecule();
+          onPageFinished: (String url) {
+            _loadMoleculeData();
           },
-          onWebResourceError: (error) {
-            debugPrint('WebView error: ${error.description}');
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('WebView错误: ${error.description}');
           },
         ),
       )
       ..addJavaScriptChannel(
         'Flutter',
-        onMessageReceived: (message) {
-          debugPrint('Message from JS: ${message.message}');
+        onMessageReceived: (JavaScriptMessage message) {
+          debugPrint('JS消息: ${message.message}');
         },
-      )
-      ..loadFlutterAsset('assets/js/molecule_viewer.html');
-  }
-
-  Future<void> _loadDefaultMolecule() async {
-    try {
-      final String moleculeData = await rootBundle.loadString('assets/models/water.pdb');
-      debugPrint('水分子数据加载成功: ${moleculeData.substring(0, 50)}...');
-      
-      await _controller.runJavaScript(
-        '''
-        try {
-          console.log("加载分子数据");
-          updateMoleculeFromData(`$moleculeData`);
-          Flutter.postMessage("分子加载成功");
-        } catch(e) {
-          console.error("分子加载失败", e);
-          Flutter.postMessage("错误: " + e.toString());
-        }
-        '''
       );
-      
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('加载分子数据失败: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _switchMolecule(String filename) async {
-    setState(() {
-      _isLoading = true;
-      _currentMolecule = filename;
-    });
     
+    _loadHtmlFromAssets();
+    _loadPredefinedMolecule('caffeine.pdb'); // 默认加载咖啡因分子
+  }
+
+  Future<void> _loadPredefinedMolecule(String fileName) async {
     try {
-      final String moleculeData = await rootBundle.loadString('assets/models/$filename');
-      debugPrint('分子数据加载成功: ${moleculeData.substring(0, 50)}...');
-      
-      await _controller.runJavaScript(
-        '''
-        try {
-          console.log("切换到新分子");
-          updateMoleculeFromData(`$moleculeData`);
-          Flutter.postMessage("分子切换成功: $filename");
-        } catch(e) {
-          console.error("分子切换失败", e);
-          Flutter.postMessage("错误: " + e.toString());
-        }
-        '''
-      );
-    } catch (e) {
-      debugPrint('切换分子失败: $e');
-    } finally {
+      final String data = await rootBundle.loadString('assets/molecules/$fileName');
       setState(() {
-        _isLoading = false;
+        pdbData = data;
       });
+      _loadMoleculeData();
+    } catch (e) {
+      debugPrint('加载预定义分子失败: $e');
     }
   }
 
-  void _loadMoleculeFile() async {
+  Future<void> _pickFile() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdb', 'mol', 'sdf', 'xyz'],
+        allowedExtensions: ['pdb'],
       );
 
-      if (result != null) {
+      if (result != null && result.files.single.path != null) {
+        File file = File(result.files.single.path!);
+        String data = await file.readAsString();
         setState(() {
-          _isLoading = true;
+          pdbData = data;
         });
-        
-        final file = File(result.files.single.path!);
-        final fileName = result.files.single.name;
-        final fileContent = await file.readAsString();
-        
-        // 保存文件到应用目录
-        final directory = await getApplicationDocumentsDirectory();
-        final targetFile = File('${directory.path}/$fileName');
-        await targetFile.writeAsString(fileContent);
-        
-        // 使用JavaScript更新分子视图
-        await _controller.runJavaScript(
-          '''
-          try {
-            console.log("加载用户上传的分子");
-            updateMoleculeFromData(`$fileContent`);
-            Flutter.postMessage("用户分子加载成功: $fileName");
-          } catch(e) {
-            console.error("用户分子加载失败", e);
-            Flutter.postMessage("错误: " + e.toString());
-          }
-          '''
-        );
-        
-        setState(() {
-          _currentMolecule = fileName;
-          _isLoading = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('成功加载分子: $fileName')),
-        );
+        _loadMoleculeData();
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('加载失败: $e')),
-      );
+      debugPrint('选择文件失败: $e');
+    }
+  }
+
+  void _loadMoleculeData() {
+    if (pdbData != null) {
+      _controller.runJavaScript('loadMolecule(`$pdbData`);');
     }
   }
 
@@ -193,104 +164,112 @@ class _MoleculeViewerPageState extends State<MoleculeViewerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('分子可视化卡片'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('分子查看器'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: _loadPredefinedMolecule,
+            itemBuilder: (BuildContext context) {
+              return predefinedMolecules.map((String molecule) {
+                return PopupMenuItem<String>(
+                  value: molecule,
+                  child: Text(molecule.replaceAll('.pdb', '')),
+                );
+              }).toList();
+            },
+            icon: const Icon(Icons.science),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                const Text(
-                  '化学分子可视化',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // 分子选择按钮
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: _availableMolecules.map((molecule) => 
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                        child: ElevatedButton(
-                          onPressed: () => _switchMolecule(molecule['file']!),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _currentMolecule == molecule['file'] 
-                                ? Colors.blue 
-                                : Colors.grey.shade200,
-                            foregroundColor: _currentMolecule == molecule['file']
-                                ? Colors.white
-                                : Colors.black87,
-                          ),
-                          child: Text(molecule['name']!),
-                        ),
-                      )
-                    ).toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // 分子查看器卡片
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    children: [
-                      WebViewWidget(controller: _controller),
-                      if (_isLoading)
-                        Container(
-                          color: Colors.white60,
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            child: WebViewWidget(controller: _controller),
           ),
-          
-          // 上传按钮
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('上传自定义分子文件'),
-                  onPressed: _loadMoleculeFile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '支持格式: PDB, MOL, SDF, XYZ',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton(
+              onPressed: _pickFile,
+              child: const Text('选择PDB文件'),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _loadHtmlFromAssets() async {
+    String fileHtml = await rootBundle.loadString('assets/js/molecule_viewer.html');
+    _controller.loadHtmlString(
+      fileHtml,
+      baseUrl: Uri.dataFromString(
+        '',
+        mimeType: 'text/html',
+        encoding: Encoding.getByName('utf-8'),
+      ).toString(),
+    );
+  }
+}
+
+class HeartEffectPage extends StatefulWidget {
+  const HeartEffectPage({super.key});
+
+  @override
+  State<HeartEffectPage> createState() => _HeartEffectPageState();
+}
+
+class _HeartEffectPageState extends State<HeartEffectPage> {
+  late WebViewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _initWebView();
+  }
+
+  void _initWebView() {
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) {
+            debugPrint('心形特效页面加载完成');
+          },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('WebView错误: ${error.description}');
+          },
+        ),
+      )
+      ..addJavaScriptChannel(
+        'Flutter',
+        onMessageReceived: (JavaScriptMessage message) {
+          debugPrint('JS消息: ${message.message}');
+        },
+      );
+    
+    _loadHeartEffectHtml();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('心形特效'),
+        backgroundColor: Colors.pink,
+      ),
+      body: WebViewWidget(controller: _controller),
+    );
+  }
+
+  Future<void> _loadHeartEffectHtml() async {
+    String fileHtml = await rootBundle.loadString('assets/js/codepen_heart.html');
+    _controller.loadHtmlString(
+      fileHtml,
+      baseUrl: Uri.dataFromString(
+        '',
+        mimeType: 'text/html',
+        encoding: Encoding.getByName('utf-8'),
+      ).toString(),
     );
   }
 }

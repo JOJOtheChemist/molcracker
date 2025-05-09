@@ -1,0 +1,27 @@
+HEADER    CARBOHYDRATE
+COMPND    GLUCOSE
+ATOM      1  C1  GLC     1       0.000   0.000   0.000
+ATOM      2  C2  GLC     1       1.523   0.000   0.000
+ATOM      3  C3  GLC     1       2.049   1.424   0.000
+ATOM      4  C4  GLC     1       1.523   2.224   1.178
+ATOM      5  C5  GLC     1       0.000   2.224   1.178
+ATOM      6  C6  GLC     1      -0.526   3.024   2.357
+ATOM      7  O1  GLC     1      -0.526  -0.800   1.079
+ATOM      8  O2  GLC     1       1.950  -0.800   1.079
+ATOM      9  O3  GLC     1       3.466   1.424   0.000
+ATOM     10  O4  GLC     1       2.049   3.546   1.178
+ATOM     11  O5  GLC     1      -0.526   0.800   2.357
+ATOM     12  O6  GLC     1      -2.050   3.024   2.357
+ATOM     13  H1  GLC     1      -0.418  -0.376  -0.939
+ATOM     14  H2  GLC     1       1.942  -0.376  -0.939
+ATOM     15  H3  GLC     1       1.710   1.900  -0.939
+ATOM     16  H4  GLC     1       1.942   1.748   2.117
+ATOM     17  H5  GLC     1      -0.339   2.700   0.239
+ATOM     18  H61 GLC     1      -0.108   2.648   3.296
+ATOM     19  H62 GLC     1      -0.108   4.051   2.357
+ATOM     20  HO1 GLC     1      -0.209  -0.529   1.958
+ATOM     21  HO2 GLC     1       1.632  -0.529   1.958
+ATOM     22  HO3 GLC     1       3.736   0.529   0.000
+ATOM     23  HO4 GLC     1       1.752   3.964   0.379
+ATOM     24  HO6 GLC     1      -2.352   2.352   2.952
+END 

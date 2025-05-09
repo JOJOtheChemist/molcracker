@@ -1,0 +1,10 @@
+HEADER    ALCOHOL
+COMPND    ETHANOL
+ATOM      1  C1  ETH     1      -0.047  -0.631   0.000
+ATOM      2  C2  ETH     1       0.047   0.631   0.000
+ATOM      3  O   ETH     1      -1.084   1.482   0.000
+ATOM      4  H1  ETH     1       0.877  -1.241   0.000
+ATOM      5  H2  ETH     1      -0.971  -1.208   0.000
+ATOM      6  H3  ETH     1       0.971   1.208   0.000
+ATOM      7  H4  ETH     1      -0.877   2.203   0.000
+END 

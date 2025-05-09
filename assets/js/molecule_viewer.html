@@ -21,18 +21,31 @@
         #molecule-viewer {
             width: 100%;
             height: 100%;
-            background-color: #ffffff;
+            background-color: #000000;
         }
         #controls {
             position: absolute;
             bottom: 10px;
             right: 10px;
-            background-color: rgba(255, 255, 255, 0.7);
+            background-color: rgba(0, 0, 0, 0.6);
             border-radius: 8px;
             padding: 8px;
             display: flex;
             flex-direction: column;
             gap: 6px;
+            z-index: 100;
+        }
+        #effects-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
         }
         #error-container {
             position: absolute;
@@ -46,6 +59,18 @@
             max-width: 80%;
             z-index: 100;
         }
+        /* 添加标签显示调试信息 */
+        #debug-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 100;
+        }
         .btn {
             background-color: #4285f4;
             color: white;
@@ -54,14 +79,66 @@
             padding: 4px 8px;
             font-size: 12px;
             cursor: pointer;
+            transition: all 0.2s;
         }
         .btn:hover {
             background-color: #3367d6;
+            transform: scale(1.05);
+        }
+        .effect-btn {
+            background: linear-gradient(45deg, #ff4081, #7c4dff);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .effect-btn:hover {
+            background: linear-gradient(45deg, #7c4dff, #ff4081);
+            transform: scale(1.05);
+        }
+        .effect-btn.active {
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
         }
     </style>
     <!-- 引入 3Dmol.js 库 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.3/3Dmol-min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.3/3Dmol-min.js"></script>
+    <!-- 引入自定义特效着色器 -->
+    <script type="x-shader/x-vertex" id="vertexShader">
+        uniform float time;
+        varying vec2 vUv;
+        
+        void main() {
+            vUv = uv;
+            vec3 pos = position;
+            
+            // 简单的波浪效果
+            pos.y += sin(pos.x * 10.0 + time) * 0.1;
+            
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+    </script>
+    
+    <script type="x-shader/x-fragment" id="fragmentShader">
+        uniform float time;
+        uniform vec3 color;
+        varying vec2 vUv;
+        
+        void main() {
+            // 创建脉冲发光效果
+            float intensity = 0.5 + 0.5 * sin(time * 2.0);
+            vec3 glow = color * intensity;
+            
+            // 边缘增亮
+            float edge = 0.05;
+            float edgeFactor = smoothstep(edge, 0.5, vUv.y) * smoothstep(edge, 0.5, 1.0 - vUv.y);
+            
+            gl_FragColor = vec4(glow, edgeFactor * 0.8);
+        }
+    </script>
 </head>
 <body>
     <div id="container">
@@ -73,7 +150,14 @@
             <button class="btn" id="toggle-surface">表面显示</button>
             <button class="btn" id="toggle-spin">旋转开关</button>
         </div>
+        <div id="effects-controls">
+            <button class="effect-btn" id="effect-neon">霓虹效果</button>
+            <button class="effect-btn" id="effect-rainbow">彩虹色</button>
+            <button class="effect-btn" id="effect-pulse">脉冲光</button>
+            <button class="effect-btn" id="effect-reset">重置效果</button>
+        </div>
         <div id="error-container"></div>
+        <div id="debug-info"></div>
     </div>
 
     <script>
@@ -82,6 +166,22 @@
         let currentModel;
         let surfaceOn = true;
         let lastPdbData;
+        
+        // 特效状态
+        let activeEffect = "none";
+        let effectInterval;
+        let pulseInterval;
+        
+        // 调试信息函数
+        function logDebug(message) {
+            console.log(message);
+            const debugEl = document.getElementById('debug-info');
+            debugEl.textContent = message;
+            debugEl.style.display = 'block';
+            setTimeout(() => {
+                debugEl.style.display = 'none';
+            }, 5000);
+        }
         
         function showError(message) {
             const errorContainer = document.getElementById('error-container');
@@ -111,10 +211,11 @@
                 }
                 
                 viewer = $3Dmol.createViewer($("#molecule-viewer"), {
-                    backgroundColor: "white",
+                    backgroundColor: "black",
                 });
                 
                 console.log("3D查看器初始化成功");
+                logDebug("3D查看器初始化成功");
                 
                 if (window.Flutter) {
                     window.Flutter.postMessage("查看器初始化成功");
@@ -123,6 +224,210 @@
                 clearError();
             } catch (e) {
                 showError("初始化查看器失败: " + e.toString());
+            }
+        }
+        
+        // 设置霓虹效果 - 使用3Dmol的原生功能
+        function applyNeonEffect() {
+            try {
+                if (!viewer) return;
+                
+                // 停止其他效果
+                stopAllEffects();
+                
+                // 使用鲜艳的颜色方案
+                viewer.setStyle({}, {
+                    stick: {
+                        radius: 0.15, 
+                        color: "magenta"  // 使用鲜艳的颜色
+                    },
+                    sphere: {
+                        radius: 0.7,
+                        color: function(atom) {
+                            // 根据原子类型分配鲜艳的颜色
+                            switch(atom.elem) {
+                                case 'H': return "cyan";
+                                case 'C': return "lime";
+                                case 'N': return "magenta";
+                                case 'O': return "yellow";
+                                case 'P': return "orange";
+                                case 'S': return "pink";
+                                default: return "white";
+                            }
+                        }
+                    }
+                });
+                
+                // 添加发光表面
+                viewer.removeAllSurfaces();
+                viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                    opacity: 0.4,
+                    color: 'purple'
+                });
+                
+                viewer.render();
+                logDebug("霓虹效果已应用");
+                activeEffect = "neon";
+                document.getElementById('effect-neon').classList.add('active');
+            } catch (e) {
+                showError("应用霓虹效果失败: " + e.toString());
+            }
+        }
+        
+        // 彩虹效果
+        function applyRainbowEffect() {
+            try {
+                if (!viewer) return;
+                
+                // 停止其他效果
+                stopAllEffects();
+                
+                // 基于序号的渐变色
+                viewer.setStyle({}, {
+                    stick: {
+                        radius: 0.15,
+                        colorscheme: "rainbow"  // 使用3Dmol的rainbow配色方案
+                    },
+                    sphere: {
+                        radius: 0.7,
+                        colorscheme: "rainbow"
+                    }
+                });
+                
+                // 添加彩虹表面
+                viewer.removeAllSurfaces();
+                viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                    opacity: 0.5,
+                    colorscheme: "rainbow"
+                });
+                
+                // 添加颜色动画效果
+                let hueValue = 0;
+                effectInterval = setInterval(() => {
+                    hueValue = (hueValue + 5) % 360;
+                    
+                    // 直接修改DOM元素的样式来创建动态效果
+                    // 这不会修改3Dmol的内部渲染，但会为用户提供视觉反馈
+                    document.getElementById('molecule-viewer').style.filter = `hue-rotate(${hueValue}deg)`;
+                    
+                }, 100);
+                
+                viewer.render();
+                logDebug("彩虹效果已应用");
+                activeEffect = "rainbow";
+                document.getElementById('effect-rainbow').classList.add('active');
+            } catch (e) {
+                showError("应用彩虹效果失败: " + e.toString());
+            }
+        }
+        
+        // 脉冲光效果
+        function applyPulseEffect() {
+            try {
+                if (!viewer) return;
+                
+                // 停止其他效果
+                stopAllEffects();
+                
+                // 使用明亮的颜色
+                viewer.setStyle({}, {
+                    stick: {
+                        radius: 0.15, 
+                        color: "white"
+                    },
+                    sphere: {
+                        radius: 0.7,
+                        color: function(atom) {
+                            // 使用鲜艳的颜色
+                            switch(atom.elem) {
+                                case 'H': return "#007bff";
+                                case 'C': return "#00ff7f";
+                                case 'N': return "#ff1493";
+                                case 'O': return "#ff4500";
+                                default: return "#ffffff";
+                            }
+                        }
+                    }
+                });
+                
+                // 添加发光表面
+                viewer.removeAllSurfaces();
+                viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                    opacity: 0.3,
+                    color: '#00ffff'
+                });
+                
+                // 添加脉冲动画
+                let intensity = 0;
+                let increasing = true;
+                pulseInterval = setInterval(() => {
+                    if (increasing) {
+                        intensity += 0.05;
+                        if (intensity >= 1) {
+                            intensity = 1;
+                            increasing = false;
+                        }
+                    } else {
+                        intensity -= 0.05;
+                        if (intensity <= 0.2) {
+                            intensity = 0.2;
+                            increasing = true;
+                        }
+                    }
+                    
+                    // 使用CSS过滤器创造脉冲发光效果
+                    document.getElementById('molecule-viewer').style.filter = 
+                        `brightness(${1 + intensity * 0.5}) contrast(${1 + intensity * 0.3})`;
+                    
+                }, 50);
+                
+                viewer.render();
+                logDebug("脉冲光效果已应用");
+                activeEffect = "pulse";
+                document.getElementById('effect-pulse').classList.add('active');
+            } catch (e) {
+                showError("应用脉冲光效果失败: " + e.toString());
+            }
+        }
+        
+        // 停止所有特效
+        function stopAllEffects() {
+            // 清除所有定时器
+            if (effectInterval) {
+                clearInterval(effectInterval);
+                effectInterval = null;
+            }
+            
+            if (pulseInterval) {
+                clearInterval(pulseInterval);
+                pulseInterval = null;
+            }
+            
+            // 重置CSS滤镜
+            document.getElementById('molecule-viewer').style.filter = '';
+            
+            // 重置按钮状态
+            document.getElementById('effect-neon').classList.remove('active');
+            document.getElementById('effect-rainbow').classList.remove('active');
+            document.getElementById('effect-pulse').classList.remove('active');
+            
+            activeEffect = "none";
+        }
+        
+        // 重置效果，恢复默认显示
+        function resetEffects() {
+            try {
+                stopAllEffects();
+                
+                if (viewer) {
+                    // 重新应用默认样式
+                    setStickStyle();
+                    viewer.render();
+                }
+                
+                logDebug("已重置所有效果");
+            } catch (e) {
+                showError("重置效果失败: " + e.toString());
             }
         }
         
@@ -145,6 +450,9 @@
                 } else {
                     viewer.clear();
                 }
+                
+                // 先停止所有特效
+                stopAllEffects();
                 
                 // 添加分子模型
                 try {
@@ -171,6 +479,7 @@
                     }
                     
                     clearError();
+                    logDebug("分子加载成功");
                 } catch (e) {
                     showError("解析分子数据失败: " + e.toString());
                 }
@@ -325,7 +634,35 @@ END`;
                 $("#toggle-surface").click(toggleSurface);
                 $("#toggle-spin").click(toggleSpin);
                 
+                // 绑定特效按钮事件
+                $("#effect-neon").click(function() {
+                    if (activeEffect === "neon") {
+                        resetEffects();
+                    } else {
+                        applyNeonEffect();
+                    }
+                });
+                
+                $("#effect-rainbow").click(function() {
+                    if (activeEffect === "rainbow") {
+                        resetEffects();
+                    } else {
+                        applyRainbowEffect();
+                    }
+                });
+                
+                $("#effect-pulse").click(function() {
+                    if (activeEffect === "pulse") {
+                        resetEffects();
+                    } else {
+                        applyPulseEffect();
+                    }
+                });
+                
+                $("#effect-reset").click(resetEffects);
+                
                 console.log("初始化完成，等待Flutter调用");
+                logDebug("初始化完成，请点击左下角按钮查看特效");
             } catch (e) {
                 showError("初始化失败: " + e.toString());
             }

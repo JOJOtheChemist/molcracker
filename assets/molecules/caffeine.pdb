@@ -1,0 +1,32 @@
+HEADER    STIMULANT                               
+COMPND    CAFFEINE                                
+ATOM      1  N   CAF     1       0.935  -0.050   0.000
+ATOM      2  C   CAF     1       0.245   1.094   0.000
+ATOM      3  N   CAF     1      -1.116   0.859   0.000
+ATOM      4  C   CAF     1      -1.250  -0.509   0.000
+ATOM      5  C   CAF     1       0.012  -1.092   0.000
+ATOM      6  C   CAF     1       0.664   2.421   0.000
+ATOM      7  O   CAF     1       1.842   2.723   0.000
+ATOM      8  N   CAF     1      -0.384   3.320   0.000
+ATOM      9  C   CAF     1      -0.114   4.736   0.000
+ATOM     10  C   CAF     1      -1.701   2.789   0.000
+ATOM     11  O   CAF     1      -2.710   3.466   0.000
+ATOM     12  N   CAF     1      -1.660   1.414   0.000
+ATOM     13  C   CAF     1      -2.882   0.645   0.000
+ATOM     14  N   CAF     1      -2.421  -1.168   0.000
+ATOM     15  C   CAF     1      -2.473  -2.611   0.000
+ATOM     16  C   CAF     1       0.218  -2.570   0.000
+ATOM     17  H   CAF     1       1.934  -0.162   0.000
+ATOM     18  H   CAF     1       0.922   5.049  -0.000
+ATOM     19  H   CAF     1      -0.587   5.126  -0.890
+ATOM     20  H   CAF     1      -0.587   5.126   0.890
+ATOM     21  H   CAF     1      -3.160   0.070   0.890
+ATOM     22  H   CAF     1      -3.160   0.070  -0.890
+ATOM     23  H   CAF     1      -3.671   1.399   0.000
+ATOM     24  H   CAF     1      -1.473  -2.991   0.000
+ATOM     25  H   CAF     1      -3.011  -2.991   0.890
+ATOM     26  H   CAF     1      -3.011  -2.991  -0.890
+ATOM     27  H   CAF     1       1.244  -2.926   0.000
+ATOM     28  H   CAF     1      -0.265  -2.971   0.890
+ATOM     29  H   CAF     1      -0.265  -2.971  -0.890
+END 

@@ -62,6 +62,13 @@ flutter:
   assets:
     - assets/models/
     - assets/js/
+    - assets/js/molecule_viewer.html
+    - assets/js/codepen_heart.html
+    - assets/molecules/caffeine.pdb
+    - assets/molecules/ethanol.pdb
+    - assets/molecules/aspirin.pdb
+    - assets/molecules/glucose.pdb
+    - assets/molecules/dna.pdb
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
