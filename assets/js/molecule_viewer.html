@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分子可视化</title>
+    <style>
+        body, html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        }
+        #container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        #molecule-viewer {
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        #error-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 8px;
+            background-color: rgba(255, 0, 0, 0.2);
+            color: red;
+            display: none;
+            border-radius: 4px;
+            max-width: 80%;
+            z-index: 100;
+        }
+        .btn {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #3367d6;
+        }
+    </style>
+    <!-- 引入 3Dmol.js 库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.3/3Dmol-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="molecule-viewer"></div>
+        <div id="controls">
+            <button class="btn" id="style-stick">球棍模型</button>
+            <button class="btn" id="style-sphere">球模型</button>
+            <button class="btn" id="style-cartoon">卡通模型</button>
+            <button class="btn" id="toggle-surface">表面显示</button>
+            <button class="btn" id="toggle-spin">旋转开关</button>
+        </div>
+        <div id="error-container"></div>
+    </div>
+
+    <script>
+        let viewer;
+        let isSpinning = true;
+        let currentModel;
+        let surfaceOn = true;
+        let lastPdbData;
+        
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.style.display = 'block';
+            errorContainer.textContent = message;
+            console.error(message);
+            
+            // 如果有Flutter通信通道，发送错误信息
+            if (window.Flutter) {
+                window.Flutter.postMessage("Error: " + message);
+            }
+        }
+        
+        function clearError() {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.style.display = 'none';
+        }
+        
+        // 初始化分子查看器
+        function initViewer() {
+            try {
+                console.log("正在初始化3D分子查看器...");
+                
+                if (!$3Dmol) {
+                    showError("3Dmol库加载失败");
+                    return;
+                }
+                
+                viewer = $3Dmol.createViewer($("#molecule-viewer"), {
+                    backgroundColor: "white",
+                });
+                
+                console.log("3D查看器初始化成功");
+                
+                if (window.Flutter) {
+                    window.Flutter.postMessage("查看器初始化成功");
+                }
+                
+                clearError();
+            } catch (e) {
+                showError("初始化查看器失败: " + e.toString());
+            }
+        }
+        
+        // 设置与Flutter通信的桥接函数
+        function loadMolecule(pdbData) {
+            try {
+                if (!pdbData || pdbData.trim() === '') {
+                    showError("分子数据为空");
+                    return;
+                }
+                
+                console.log("开始加载分子数据...");
+                console.log("分子数据部分内容:", pdbData.substring(0, 50) + "...");
+                
+                lastPdbData = pdbData;
+                
+                // 如果已存在查看器，清除它
+                if (!viewer) {
+                    initViewer();
+                } else {
+                    viewer.clear();
+                }
+                
+                // 添加分子模型
+                try {
+                    console.log("解析分子数据...");
+                    currentModel = viewer.addModel(pdbData, "pdb");
+                    console.log("分子数据解析成功");
+                    
+                    // 默认样式 - 球棍模型
+                    setStickStyle();
+                    
+                    // 居中并渲染分子
+                    viewer.zoomTo();
+                    viewer.zoom(0.8);
+                    viewer.render();
+                    
+                    // 启动自动旋转
+                    if (isSpinning) {
+                        startSpin();
+                    }
+                    
+                    // 通知Flutter加载完成
+                    if (window.Flutter) {
+                        window.Flutter.postMessage("分子加载成功");
+                    }
+                    
+                    clearError();
+                } catch (e) {
+                    showError("解析分子数据失败: " + e.toString());
+                }
+            } catch (e) {
+                showError("加载分子时发生错误: " + e.toString());
+            }
+        }
+        
+        // 当Flutter调用此函数时更新分子模型
+        function updateMoleculeFromData(data) {
+            try {
+                stopSpin();
+                console.log("收到新的分子数据...");
+                loadMolecule(data);
+            } catch (e) {
+                showError("更新分子数据失败: " + e.toString());
+            }
+        }
+        
+        // 球棍模型样式
+        function setStickStyle() {
+            try {
+                viewer.setStyle({}, {stick: {radius: 0.15, colorscheme: 'Jmol'}});
+                if (surfaceOn) {
+                    viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                        opacity: 0.6,
+                        colorscheme: 'whiteCarbon'
+                    });
+                }
+                viewer.render();
+            } catch (e) {
+                showError("应用球棍样式失败: " + e.toString());
+            }
+        }
+        
+        // 球模型样式
+        function setSphereStyle() {
+            try {
+                viewer.setStyle({}, {sphere: {radius: 0.8, colorscheme: 'Jmol'}});
+                if (surfaceOn) {
+                    viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                        opacity: 0.4,
+                        colorscheme: 'whiteCarbon'
+                    });
+                }
+                viewer.render();
+            } catch (e) {
+                showError("应用球模型样式失败: " + e.toString());
+            }
+        }
+        
+        // 卡通模型样式 (仅适用于蛋白质)
+        function setCartoonStyle() {
+            try {
+                viewer.setStyle({}, {cartoon: {color: 'spectrum'}});
+                if (surfaceOn) {
+                    viewer.addSurface($3Dmol.SurfaceType.SAS, {
+                        opacity: 0.3,
+                        colorscheme: 'spectrum'
+                    });
+                }
+                viewer.render();
+            } catch (e) {
+                showError("应用卡通样式失败: " + e.toString());
+            }
+        }
+        
+        // 切换表面显示
+        function toggleSurface() {
+            try {
+                surfaceOn = !surfaceOn;
+                viewer.removeAllSurfaces();
+                if (surfaceOn) {
+                    viewer.addSurface($3Dmol.SurfaceType.VDW, {
+                        opacity: 0.6,
+                        colorscheme: 'whiteCarbon'
+                    });
+                }
+                viewer.render();
+            } catch (e) {
+                showError("切换表面显示失败: " + e.toString());
+            }
+        }
+        
+        // 旋转动画
+        let spinInterval;
+        function startSpin() {
+            if (spinInterval) return;
+            isSpinning = true;
+            spinInterval = setInterval(function() {
+                try {
+                    viewer.rotate(1, {x:0, y:1, z:0});
+                    viewer.render();
+                } catch (e) {
+                    console.error("旋转失败:", e);
+                    stopSpin();
+                }
+            }, 50);
+        }
+        
+        function stopSpin() {
+            isSpinning = false;
+            if (spinInterval) {
+                clearInterval(spinInterval);
+                spinInterval = null;
+            }
+        }
+        
+        function toggleSpin() {
+            if (isSpinning) {
+                stopSpin();
+            } else {
+                startSpin();
+            }
+        }
+        
+        // 默认加载水分子示例
+        const defaultMolecule = `HEADER    WATER
+ATOM      1  O   HOH     1       0.000   0.000   0.000
+ATOM      2  H1  HOH     1       0.000   0.000   0.970
+ATOM      3  H2  HOH     1       0.939   0.000  -0.243
+END`;
+        
+        // 页面加载完成后初始化
+        $(document).ready(function() {
+            console.log("页面加载完成，初始化查看器");
+            
+            try {
+                initViewer();
+                
+                // 测试一下默认的水分子
+                loadMolecule(defaultMolecule);
+                
+                console.log("加载默认水分子成功");
+                
+                // 绑定控制按钮事件
+                $("#style-stick").click(function() {
+                    viewer.removeAllSurfaces();
+                    setStickStyle();
+                });
+                
+                $("#style-sphere").click(function() {
+                    viewer.removeAllSurfaces();
+                    setSphereStyle();
+                });
+                
+                $("#style-cartoon").click(function() {
+                    viewer.removeAllSurfaces();
+                    setCartoonStyle();
+                });
+                
+                $("#toggle-surface").click(toggleSurface);
+                $("#toggle-spin").click(toggleSpin);
+                
+                console.log("初始化完成，等待Flutter调用");
+            } catch (e) {
+                showError("初始化失败: " + e.toString());
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,5 @@
+HEADER    WATER
+ATOM      1  O   HOH     1       0.000   0.000   0.000
+ATOM      2  H1  HOH     1       0.000   0.000   0.970
+ATOM      3  H2  HOH     1       0.939   0.000  -0.243
+END 
